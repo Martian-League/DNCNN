@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="c50e0c52-ea84-40fa-8ec4-4e403c0b4376" name="GAN">
+        <fileTransfer accessType="SFTP" host="202.117.43.228" port="22" sshConfigId="26274de4-a2aa-4ece-8cd7-3142ae4d13c1" sshConfig="gwb@202.117.43.228:22 password">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+        </fileTransfer>
+      </webServer>
+    </option>
+  </component>
+</project>

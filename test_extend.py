@@ -15,7 +15,7 @@ from dataset_origin import prepare_data, Dataset
 from utils import *
 from windows import window_partition,window_reverse
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3"
 
 parser = argparse.ArgumentParser(description="DnCNN")
 parser.add_argument("--preprocess", type=bool, default=False, help='run prepare_data or not')
@@ -38,6 +38,108 @@ parser.add_argument("--seismic_path", type=str, default="/home/gwb/PPP/data/trai
 parser.add_argument("--seismic_label", type=str, default="/home/gwb/Gittest/result/images/Denosing_Result/",
                     help='with known noise level (S) or blind training (B)')
 opt = parser.parse_args()
+
+def Patch(img, Windows_size, Overlap_size):
+
+    Step_size = Windows_size - Overlap_size
+    Height, Width = img.shape
+    Width_new = ((Width-Windows_size)//Step_size+1)*Step_size+Windows_size
+    Height_new = ((Height-Windows_size)// Step_size + 1) * Step_size+Windows_size
+    img = np.pad(img, ((0, Height_new - img.shape[0]), (0, Width_new - img.shape[1])), 'symmetric')
+    img_lapcol = Overlap(img,Windows_size,Overlap_size)
+    img_laprow = Overlap(img_lapcol.T,Windows_size,Overlap_size)
+    return img_laprow
+
+
+def Overlap(img,Windows_size,Overlap_size):
+    Step_size = Windows_size - Overlap_size
+    Height, Width = img.shape
+    #print(img.shape)
+    num_windows = ((Width - Windows_size) // Step_size + 1)
+    N_col = Windows_size * num_windows
+    Matrix_extend = np.zeros((Width,N_col))
+    Matrix = np.eye(Width)
+    for i in range(num_windows-1,0,-1):
+        Matrix_extend[:,i*Windows_size:(i+1)*Windows_size] = Matrix[:,i*Step_size:i*Step_size+Windows_size]
+    img_lap = np.dot(img, Matrix_extend)
+    return img_lap
+
+def Normlize(img,label):
+    B, C, H, W = img.shape
+    img = img.view(B, -1)
+    label = label.view(B, -1)
+
+    label -= img.min(1, keepdim=True)[0]
+    img -= img.min(1, keepdim=True)[0]
+
+    label /= img.max(1, keepdim=True)[0]
+    img /= img.max(1, keepdim=True)[0]
+
+    img = img.view(B, C, H, W)
+    label = label.view(B, C, H, W)
+    return img, label
+
+def Anti_Normlize(img,result):
+    B, C, H, W = img.shape
+    img = img.view(img.size(0), -1)
+    result = result.view(result.size(0), -1)
+
+    result *= (img.max(1, keepdim=True)[0]-img.min(1, keepdim=True)[0])
+    result += img.min(1, keepdim=True)[0]
+
+    result = result.view(B, C, H, W)
+    return result
+
+def Anti_Overlap(img,Windows_size,Overlap_size):
+    B, C, H, W = img.shape
+    img_out = np.zeros(600)
+    Step_size = Windows_size - Overlap_size
+    Block=[]
+    Num = W // Windows_size
+    #不求矩阵直接做
+    for i in range(Num):
+        if i == 0:
+            Block.append(img[:, Step_size])
+        elif i == Num-1:
+            Block.append(0.5*img[:,Windows_size*i-Overlap_size:Windows_size*i]+0.5*img[:,Windows_size*i:Windows_size*i+Overlap_size])
+            Block.append(img[:, Windows_size * i + Overlap_size:])
+        else:
+            Block.append(0.5 * img[:, Windows_size * i - Overlap_size:Windows_size * i]+0.5*img[:,Windows_size*i:Windows_size*i+Overlap])
+            Block.append(img[:, Windows_size * i + Overlap_size:Windows_size * (i+1) - Overlap_size])
+    return np.array(Block)
+def main():
+    # Load dataset
+    print('Loading dataset ...\n')
+    dataset_train = ImageDataset()
+    #dataset_val = ImageDataset()
+    loader_train = DataLoader(dataset=dataset_train, num_workers=4, batch_size=opt.batchSize, shuffle=False)
+    print("# of training samples: %d\n" % int(len(dataset_train)))
+    # Build model
+
+    for i, (data, label) in enumerate(loader_train, 0):
+        # testing step
+        #一次只处理一个数据，但是切分成多个也可以很好的利用并行化计算
+        torch.cuda.empty_cache()
+        data_lap = Patch(data, opt.windows_size, opt.Overlap)
+        label_lap = Patch(data, opt.windows_size, opt.Overlap)
+        B, C, H, W = data_lap.shape
+        window_size = opt.windows_size
+        data_split_norm = window_partition(data, window_size)
+        label_split_norm = window_partition(label, window_size)
+
+        item = test(data_split_norm, label_split_norm)
+        result = item.cpu()
+        #解归一化
+        #result = Anti_Normlize(data_split,result)
+        result = window_reverse(result, window_size, H, W)
+        result = result.numpy().reshape(H,W)
+
+        result = Anti_Overlap(result, opt.windows_size, opt.overlap_size)
+
+        noise = data.numpy()-result
+        img_name = 'the_' + str(i) + '_seismic'
+        np.save('%s/test/images_result/%s_%s.npy' %(opt.exp_path, img_name, opt.mode),result)
+        np.save('%s/test/images_noise/%s_%s.npy' % (opt.exp_path, img_name, opt.mode), noise)
 
 def test(data,label):
     with torch.no_grad():
@@ -104,75 +206,9 @@ def test(data,label):
         # if you are using older version of PyTorch, you may need to change loss.item() to loss.data[0]
         ## the end of each epoch
         torch.cuda.empty_cache()
-        return output#.squeeze(0)
+        return output#.squeeze(0)#之前的时候需要增加维度
 
-def Normlize(img,label):
-    B, C, H, W = img.shape
-    img = img.view(B, -1)
-    label = label.view(B, -1)
 
-    label -= img.min(1, keepdim=True)[0]
-    img -= img.min(1, keepdim=True)[0]
-
-    label /= img.max(1, keepdim=True)[0]
-    img /= img.max(1, keepdim=True)[0]
-
-    img = img.view(B, C, H, W)
-    label = label.view(B, C, H, W)
-    return img, label
-
-def Anti_Normlize(img,result):
-    B, C, H, W = img.shape
-    img = img.view(img.size(0), -1)
-    result = result.view(result.size(0), -1)
-
-    result *= (img.max(1, keepdim=True)[0]-img.min(1, keepdim=True)[0])
-    result += img.min(1, keepdim=True)[0]
-
-    result = result.view(B, C, H, W)
-    return result
-def main():
-    # Load dataset
-    print('Loading dataset ...\n')
-    dataset_train = ImageDataset()
-    #dataset_val = ImageDataset()
-    loader_train = DataLoader(dataset=dataset_train, num_workers=4, batch_size=opt.batchSize, shuffle=True)
-    print("# of training samples: %d\n" % int(len(dataset_train)))
-    # Build model
-    result=[]
-    for i, (data, label) in enumerate(loader_train, 0):
-        # testing step
-        torch.cuda.empty_cache()
-        B, C, H, W = data.shape
-        window_size = W//2
-        data_split_norm = window_partition(data,window_size)
-        label_split_norm = window_partition(label, window_size)
-
-        torch.cuda.empty_cache()
-
-        #将原先的for循环的方式改为矩阵方式，这样如果有多个GPU，就能够提高处理的效率，
-        #data_split_norm的第一个通道为B，也就是从单个数据切出来的数据个数
-        '''   之前的做法    
-        for j in range(data_split_norm.shape[0]):
-            torch.cuda.empty_cache()
-            #print(torch.max(label_split_norm[j, :, :, :]))
-            #print(torch.min(label_split_norm[j, :, :, :]))
-            item = test(data_split_norm[j, :, :, :].unsqueeze(0), label_split_norm[j, :, :, :].unsqueeze(0))
-            result.append(item.cpu())
-        result = torch.tensor([item.detach().numpy() for item in result])'''
-
-        item = test(data_split_norm,label_split_norm)
-        result = item.cpu()
-        #解归一化
-        #result = Anti_Normlize(data_split,result)
-        result = window_reverse(result, window_size, H, W)
-
-        result = result.numpy().reshape(H,W)
-        noise = data.numpy()-result
-
-        img_name = 'the_' + str(i) + '_seismic'
-        np.save('%s/test/images_result/%s_%s.npy' %(opt.exp_path, img_name, opt.mode),result)
-        np.save('%s/test/images_noise/%s_%s.npy' % (opt.exp_path, img_name, opt.mode), noise)
 if __name__ == "__main__":
     '''if opt.preprocess:
         if opt.mode == 'S':
