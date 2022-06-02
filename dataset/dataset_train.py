@@ -11,6 +11,7 @@ import os
 import torch
 import numpy as np
 
+
 def read_data(root_dir,Normlize):
 
     test_index = [6, 51, 61, 41, 137, 18, 13, 188, 95, 73, 126, 203, 35, 26, 71]
@@ -98,10 +99,7 @@ class ImageDataset(data.Dataset):  # 继承
         label = self.label[idx,:,:]
         row = img.shape[0]
         col = img.shape[1]
-        print(np.max(label))
-        print(np.min(label))
-        print(np.max(img))
-        print(np.min(img))
+
         #img,label = Normlize(img,label)
 
         img = img.reshape(1, row, col)

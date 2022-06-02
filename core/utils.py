@@ -2,6 +2,7 @@ import math
 import torch
 import torch.nn as nn
 import numpy as np
+import argparse
 from skimage.metrics import peak_signal_noise_ratio as compare_psnr
 from skimage.metrics import structural_similarity as compare_ssim
 
@@ -24,7 +25,7 @@ def batch_PSNR(img, imclean, data_range):
         PSNR += compare_psnr(Iclean[i,:,:,:], Img[i,:,:,:], data_range=data_range)
     return (PSNR/Img.shape[0])
 
-def batch_SSIM(img, imclean, data_range):
+def batch_SSIM(img, imclean):
     Img = img.data.cpu().numpy().astype(np.float32)
     Iclean = imclean.data.cpu().numpy().astype(np.float32)
     SSIM = 0
@@ -32,6 +33,20 @@ def batch_SSIM(img, imclean, data_range):
         #print(np.shape(Iclean[i,:,:,:]))
         SSIM += compare_ssim(Iclean[i,0,:,:], Img[i,0,:,:], channel_axis=False)
     return (SSIM/Img.shape[0])
+
+def SSIM_loss(img,imclean,level):
+    #设置各层的所占的权重
+    weight_layer = [0.2,0.2,0.2,0.2,0.2]
+    ssim_loss = 0
+    img_iter = img.clone()
+    label_iter = imclean.clone()
+    downsample = nn.AvgPool2d(2, stride=2)
+    for i in range(level):
+        loss = weight_layer[i]*batch_SSIM(img_iter, label_iter)
+        ssim_loss = ssim_loss+loss
+        img_iter = downsample(img_iter)
+        label_iter = downsample(label_iter)
+    return ssim_loss
 
 def data_augmentation(image, mode):
     out = np.transpose(image, (1,2,0))
@@ -81,3 +96,26 @@ class TVLoss(nn.Module):
 
     def _tensor_size(self,t):
         return t.size()[1]*t.size()[2]*t.size()[3]
+
+def arg_set():
+    parser = argparse.ArgumentParser(description="DnCNN")
+    parser.add_argument("--preprocess", type=bool, default=False, help='run prepare_data or not')
+    parser.add_argument("--batchSize", type=int, default=1, help="Training batch size")
+    parser.add_argument("--num_of_layers", type=int, default=17, help="Number of total layers")
+    parser.add_argument("--epochs", type=int, default=50, help="Number of training epochs")
+    parser.add_argument("--milestone", type=int, default=30, help="When to decay learning rate; should be less than epochs")
+    parser.add_argument("--lr", type=float, default=1e-4, help="Initial learning rate")
+    parser.add_argument("--outf", type=str, default="logs", help='path of log files')
+    parser.add_argument("--mode", type=str, default="B", help='with known noise level (S) or blind training (B)')
+    parser.add_argument("--noiseL", type=float, default=5, help='noise level; ignored when mode=B')
+    parser.add_argument("--val_noiseL", type=float, default=5, help='noise level used on validation set')
+    parser.add_argument("--exp_path", type=str, default="/home/gwb/DNCNN/result",
+                        help='with known noise level (S) or blind training (B)')
+    parser.add_argument("--logdir", type=str, default="logs", help='path of log files')
+    parser.add_argument("--Windows_size", type=int, default=600, help="Number of total layers")
+    parser.add_argument("--Overlap_size", type=int, default=100, help="Number of total layers")
+    parser.add_argument("--seismic_path", type=str, default="/home/gwb/PPP/data/trainset/Testdata/",
+                        help='with known noise level (S) or blind training (B)')
+    parser.add_argument("--seismic_label", type=str, default="/home/gwb/Gittest/result/images/Denosing_Result/",
+                        help='with known noise level (S) or blind training (B)')
+    return parser

@@ -1,5 +1,9 @@
 import os
+import sys
+#print(sys.path)
+sys.path.append("/home/gwb/DNCNN/")
 import argparse
+import segyio
 import numpy as np
 import torch
 import torch.nn as nn
@@ -8,14 +12,15 @@ import torchvision.utils as utils
 from torch.autograd import Variable
 from torch.utils.data import DataLoader
 from tensorboardX import SummaryWriter
+#from dataset_test import ImageDataset
 
-from dataset_large import ImageDataset
-from models import DnCNN
-from dataset_origin import prepare_data, Dataset
-from utils import *
+from dataset.dataset_segy_test import SegyDataset
+from core.models import DnCNN
+#from dataset_origin import prepare_data, Dataset
+from core.utils import *
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 
 parser = argparse.ArgumentParser(description="DnCNN")
 parser.add_argument("--preprocess", type=bool, default=False, help='run prepare_data or not')
@@ -29,14 +34,18 @@ parser.add_argument("--mode", type=str, default="B", help='with known noise leve
 parser.add_argument("--noiseL", type=float, default=5, help='noise level; ignored when mode=B')
 parser.add_argument("--val_noiseL", type=float, default=5, help='noise level used on validation set')
 parser.add_argument("--exp_path", type=str, default="/home/gwb/DNCNN/result", help='with known noise level (S) or blind training (B)')
-parser.add_argument("--logdir", type=str, default="logs", help='path of log files')
+parser.add_argument("--logdir", type=str, default="/home/gwb/DNCNN/logs", help='path of log files')
+parser.add_argument("--path_val", type=str, default="/home/gwb/Dataset/train/", help='path of log files')
+parser.add_argument("--path_train", type=str, default="/home/gwb/Dataset/train/", help='path of log files')
+
 opt = parser.parse_args()
 
 def main():
     # Load dataset
     with torch.no_grad():
         print('Loading dataset ...\n')
-        dataset_train = ImageDataset()
+        dataset_train = SegyDataset(opt.path_val)
+        #dataset_train = ImageDataset()
         loader_train = DataLoader(dataset=dataset_train, num_workers=4, batch_size=opt.batchSize, shuffle=False)
         print("# of training samples: %d\n" % int(len(dataset_train)))
         # Build model
@@ -45,11 +54,11 @@ def main():
         criterion.cuda()
         #net.apply(weights_init_kaiming)
         # Move to GPU
-        device_ids = [0, 2]
+        device_ids = [0]
         model = nn.DataParallel(net, device_ids=device_ids).cuda()
-        model.load_state_dict(torch.load(os.path.join(opt.logdir, 'net_17_globalnorm.pth')))
+        model.load_state_dict(torch.load(os.path.join(opt.logdir, 'net_17_segy_60.pth')))
         model.eval()
-        for i, (data, label) in enumerate(loader_train, 0):
+        for i, (data, label,img_name) in enumerate(loader_train, 0):
             # training step
             torch.cuda.empty_cache()
             img_train = label.cuda()
@@ -61,26 +70,37 @@ def main():
             out_train = torch.clamp(imgn_train-img_denoise, 0, 1.)
 
             loss = criterion(out_train, imgn_train) / (imgn_train.size()[0] * 2)
-            psnr_train = batch_PSNR(out_train, imgn_train, 1.)
+            psnr_train = batch_PSNR(out_train, img_train, 1.)
 
-            ##解归一化,即使打乱也不影响
-            result = Anti_Normlize(img_train, out_train)
-            img_denoise = Anti_Normlize(img_train, img_denoise)
+            result = out_train.cpu().squeeze().numpy()
+            #img_denoise = Anti_Normlize(img_train, img_denoise)#这种做法是错误的
             print(result.shape)
             #result = out_train
-            noise = img_denoise
+            noise = img_denoise.cpu().squeeze().numpy()
+            #暂时先放这，没有进行复原
             #print(torch.max(label[0,:,:,:]))
             label_save = label.cpu().numpy()
 
             print("[%d/%d] loss: %.4f PSNR_train: %.4f" %
                 ( i+1, len(loader_train), loss.item(), psnr_train))
-            img_name = 'the_'+str(i)+'_seismic'
-            img_noise = 'the_'+str(i)+'_noise'
-            img_origin = 'the_' + str(i) + '_origin'
+            print(img_name)
+            img_name = img_name[0][:-4]#img_name是个元组
+            print(img_name)
+            #img_noise = 'the_'+str(i)+'_noise'
+            #img_origin = 'the_' + str(i) + '_origin'
 
-            np.save('%s/shuffle_result/images_result/%s_%s.npy' % (opt.exp_path, img_name, opt.mode), result)
-            np.save('%s/shuffle_result/images_noise/%s_%s.npy' % (opt.exp_path, img_noise, opt.mode), noise)
-            np.save('%s/shuffle_result/images_origin/%s_%s.npy' % (opt.exp_path, img_origin, opt.mode), label_save)
+            '''
+            np.save('%s/segy_dncnn/images_result/%s_%s.npy' % (opt.exp_path, 'result', img_name), result)
+            np.save('%s/segy_dncnn/images_noise/%s_%s.npy' % (opt.exp_path, 'noise', img_name), noise)
+            np.save('%s/segy_dncnn/images_origin/%s_%s.npy' % (opt.exp_path, 'origin', img_name), label_save)
+
+            result.T.tofile('%s/segy_dncnn/images_result/%s_%s.bin' % (opt.exp_path, 'result', img_name))
+            noise.T.tofile('%s/segy_dncnn/images_noise/%s_%s.bin' % (opt.exp_path, 'noise', img_name))
+            label_save.T.tofile('%s/segy_dncnn/images_origin/%s_%s.bin' % (opt.exp_path, 'origin', img_name))
+            '''
+            segyio.tools.from_array2D('%s/segy_dncnn/images_result/%s_%s.sgy' % (opt.exp_path, 'result', img_name), result.T)
+            segyio.tools.from_array2D('%s/segy_dncnn/images_noise/%s_%s.sgy' % (opt.exp_path, 'noise', img_name), noise.T)
+            #segyio.tools.from_array2D('%s/segy_dncnn/images_result/%s_%s.bin' % (opt.exp_path, 'result', img_name), label_save.T)
             save_imgs = torch.cat((save_imgs, out_train.cpu()), dim=0)
             utils.save_image(
                 save_imgs.float(),

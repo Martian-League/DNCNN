@@ -1,3 +1,10 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Sat Dec 26 12:17:19 2020
+这个文档是多次波压制的程序
+@author: lx
+"""
+
 import os
 import argparse
 import numpy as np

@@ -37,8 +37,8 @@ opt = parser.parse_args()
 def main():
     # Load dataset
     print('Loading dataset ...\n')
-    #dataset_train = ImageDataset()
-    dataset_train = SegyDataset(opt.path_train)
+    dataset_train = ImageDataset()
+    #dataset_train = SegyDataset(opt.path_train)
     loader_train = DataLoader(dataset=dataset_train, num_workers=4, batch_size=opt.batchSize, shuffle=True)
     print("# of training samples: %d\n" % int(len(dataset_train)))
     # Build model
@@ -49,7 +49,7 @@ def main():
     # Move to GPU
     device_ids = [0]
     model = nn.DataParallel(net, device_ids=device_ids).cuda()
-    #model.load_state_dict(torch.load(os.path.join(opt.logdir, 'net_17.pth')))
+    model.load_state_dict(torch.load(os.path.join(opt.logdir, 'net_17.pth')))
     criterion.cuda()
     # Optimizer
     optimizer = optim.Adam(model.parameters(), lr=opt.lr)

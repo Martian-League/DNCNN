@@ -20,6 +20,14 @@ def main():
             f.truncate(0)
             f.write(temp+ os.linesep)
             f.close()
-
+def test():
+    import os
+    import sys
+    # 获取当前代码文件绝对路径
+    #current_dir = os.path.dirname(os.path.abspath(__file__))
+    # 将需要导入模块代码文件相对于当前文件目录的绝对路径加入到sys.path中
+    sys.path.append("/home/gwb/DNCNN/core/")
+    import core
 if __name__=="__main__":
-    main()
+    #main()
+    test()

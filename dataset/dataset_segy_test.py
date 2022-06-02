@@ -11,6 +11,7 @@ import os
 import torch
 import numpy as np
 import segyio
+import pywt
 
 def read_data(root_dir,Normlize):
 
@@ -23,14 +24,14 @@ def read_data(root_dir,Normlize):
     for filename in os.listdir(root_dir + "label"):  # 展开成一个新的列表
         metaslabel.append(filename)
 
-    train_filename = random.sample(metas, 5)
-    for file in train_filename:
+    #train_filename = random.sample(metas, 5)
+    for file in metas[:10]:
         filename_sample = root_dir + "sample/" + file
         filename_label = root_dir + "label/clean_" + file
         sample_t = ReadSegyData(filename_sample)
         #print("训练集OK")
         label_t = ReadSegyData(filename_label)
-        print(file)
+        #print(file)
         #sample_t = np.pad(sample_t, ((0, 0), (1152-sample_t.shape[1],0)), 'symmetric')
         #label_t = np.pad(label_t, ((0, 0), (1152 - label_t.shape[1], 0)), 'symmetric')
         if Normlize == True:
@@ -42,13 +43,18 @@ def read_data(root_dir,Normlize):
         label.append(label_t.astype(np.float32))
     sample_torch = [torch.FloatTensor(item) for item in sample]
     label_torch = [torch.FloatTensor(item) for item in label]
-    return sample_torch, label_torch
+    return sample_torch, label_torch,metas[:10]
 
 def ReadSegyData(filename):
     with segyio.open(filename,'r',ignore_geometry=True) as f:
         f.mmap()
         data2D = np.asarray([np.copy(x) for x in f.trace[:]]).T
     f.close()
+    '''
+    dst_root = "/home/gwb/DNCNN/result/segy_dncnn/sgy_root/"
+    dstpath = dst_root + os.path.basename(filename)
+    segyio.tools.from_array2D(dstpath, data2D.T)
+    '''
     return data2D
 
 
@@ -89,9 +95,10 @@ class SegyDataset(data.Dataset):  # 继承
         self.num = 5
         self.data = []
         self.label = []
+        self.filename= []
         root_dir = path
 
-        data, label = read_data(root_dir, False)
+        data, label ,self.filename = read_data(root_dir, False)
 
         for i in range(len(data)):
             data[i], label[i] = Normlize(data[i].unsqueeze(0), label[i].unsqueeze(0))
@@ -99,7 +106,7 @@ class SegyDataset(data.Dataset):  # 继承
             self.label.append(label[i])
         #self.data = np.concatenate(self.data, axis=0)
         #self.label = np.concatenate(self.label, axis=0)
-
+        self.num = len(self.data)
         print("read meta done")
 
     def __len__(self):  # 这儿应该是自定义函数，和系统自带的len不同
@@ -114,12 +121,10 @@ class SegyDataset(data.Dataset):  # 继承
         row = img.shape[1]
         col = img.shape[2]
         #print(img.shape)
-        #exit()
-        #img,label = Normlize(img,label)
-
+        img_name = self.filename[idx]
         img = img.reshape(1, row, col)
         label = label.reshape(1, row, col)
         img = torch.FloatTensor(img)
         label = torch.FloatTensor(label)
-        return img, label
+        return img, label,img_name
 

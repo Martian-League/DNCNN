@@ -3,7 +3,6 @@ import argparse
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.optim as optim
 import torchvision.utils as utils
 from torch.autograd import Variable
 from torch.utils.data import DataLoader
@@ -11,11 +10,10 @@ from tensorboardX import SummaryWriter
 
 from dataset_test import ImageDataset
 from models import DnCNN
-from dataset_origin import prepare_data, Dataset
 from utils import *
-from windows import window_partition,window_reverse
+from core.windows import window_partition,window_reverse
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 parser = argparse.ArgumentParser(description="DnCNN")
 parser.add_argument("--preprocess", type=bool, default=False, help='run prepare_data or not')

@@ -12,6 +12,7 @@ import os
 import torch
 import numpy as np
 import segyio
+import pywt
 
 def read_data(root_dir,Normlize):
 
@@ -25,7 +26,7 @@ def read_data(root_dir,Normlize):
         metaslabel.append(filename)
     print(len(metas))
     print(len(metaslabel))
-    train_filename = random.sample(metas, 50)
+    train_filename = random.sample(metas, 10)
     for file in train_filename:
         filename_sample = root_dir + "sample/" + file
         filename_label = root_dir + "label/clean_" + file
@@ -137,6 +138,7 @@ def Normlize(img,label):
     return img, label
 
 def Normlize_c(img,label):
+    #排除野值干扰
     B, H, W = img.shape
     img = img.contiguous().view(B, -1)
     label = label.contiguous().view(B, -1)
@@ -155,11 +157,19 @@ def Normlize_c(img,label):
     label = label.view(B,  H, W)
     return img, label
 
+def Wavelet(img):
+    coeffs2 = pywt.dwt2(img, 'db4')
+    LL, (LH, HL, HH) = coeffs2
+    #print("经过小波变换")
+    combin = np.array([LL, LH, HL, HH])
+
+    return combin
+
 class SegyDataset(data.Dataset):  # 继承
 
     def __init__(self,path):
 
-        self.num = 2000
+        self.num = 20
         self.data = []
         self.label = []
         root_dir = path
@@ -175,7 +185,8 @@ class SegyDataset(data.Dataset):  # 继承
             if (len(Split_data(data[i].numpy()))>0):
                 d_numpy = data[i].numpy()
                 lb_numpy = label[i].numpy()
-                temp1,temp2 = Split_data_random(d_numpy,lb_numpy)
+                #print(d_numpy.shape)
+                temp1, temp2 = Split_data_random(d_numpy[:, : , :], lb_numpy[: ,: ,:])
                 self.data.append(temp1)
                 self.label.append(temp2)
         self.data = np.concatenate(self.data, axis=0)
@@ -195,20 +206,14 @@ class SegyDataset(data.Dataset):  # 继承
             random_idx = np.random.randint(0, high=self.num)
             print("漏网之鱼")
             #将数据的最大值和最小值输出偶然发现，空白时两者一样大
-        img = self.data[random_idx, :, :]
-        label = self.label[random_idx, :, :]
+        img = Wavelet(self.data[random_idx, :, :])
+        label = Wavelet(self.label[random_idx, :, :])
 
-        row = img.shape[0]
-        col = img.shape[1]
-        #print(img.shape)
-        '''print(img.shape)
-        print(np.max(img))
-        print(np.min(img))'''
-        #exit()
-        #img,label = Normlize(img,label)
+        row = img.shape[1]
+        col = img.shape[2]
 
-        img = img.reshape(1, row, col)
-        label = label.reshape(1, row, col)
+        img = img.reshape(4, row, col)
+        label = label.reshape(4, row, col)
         img = torch.FloatTensor(img)
         label = torch.FloatTensor(label)
         #data, label = Normlize(img, label)

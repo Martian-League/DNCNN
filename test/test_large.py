@@ -5,18 +5,15 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torchvision.utils as utils
-from torch.autograd import Variable
 from torch.utils.data import DataLoader
 from tensorboardX import SummaryWriter
-from dataset_test import ImageDataset
 
-from dataset_segy_test import SegyDataset
+from dataset.dataset_large import ImageDataset
 from models import DnCNN
-from dataset_origin import prepare_data, Dataset
 from utils import *
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "2,3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3"
 
 parser = argparse.ArgumentParser(description="DnCNN")
 parser.add_argument("--preprocess", type=bool, default=False, help='run prepare_data or not')
@@ -31,17 +28,13 @@ parser.add_argument("--noiseL", type=float, default=5, help='noise level; ignore
 parser.add_argument("--val_noiseL", type=float, default=5, help='noise level used on validation set')
 parser.add_argument("--exp_path", type=str, default="/home/gwb/DNCNN/result", help='with known noise level (S) or blind training (B)')
 parser.add_argument("--logdir", type=str, default="logs", help='path of log files')
-parser.add_argument("--path_val", type=str, default="/home/gwb/Dataset/train/", help='path of log files')
-parser.add_argument("--path_train", type=str, default="/home/gwb/Dataset/train/", help='path of log files')
-
 opt = parser.parse_args()
 
 def main():
     # Load dataset
     with torch.no_grad():
         print('Loading dataset ...\n')
-        dataset_train = SegyDataset(opt.path_val)
-        #dataset_train = ImageDataset()
+        dataset_train = ImageDataset()
         loader_train = DataLoader(dataset=dataset_train, num_workers=4, batch_size=opt.batchSize, shuffle=False)
         print("# of training samples: %d\n" % int(len(dataset_train)))
         # Build model
@@ -50,9 +43,9 @@ def main():
         criterion.cuda()
         #net.apply(weights_init_kaiming)
         # Move to GPU
-        device_ids = [0, 1]
+        device_ids = [2]
         model = nn.DataParallel(net, device_ids=device_ids).cuda()
-        model.load_state_dict(torch.load(os.path.join(opt.logdir, 'net_17_segy_60.pth')))
+        model.load_state_dict(torch.load(os.path.join(opt.logdir, 'net_17_globalnorm.pth')))
         model.eval()
         for i, (data, label) in enumerate(loader_train, 0):
             # training step
@@ -66,14 +59,14 @@ def main():
             out_train = torch.clamp(imgn_train-img_denoise, 0, 1.)
 
             loss = criterion(out_train, imgn_train) / (imgn_train.size()[0] * 2)
-            psnr_train = batch_PSNR(out_train, img_train, 1.)
+            psnr_train = batch_PSNR(out_train, imgn_train, 1.)
 
-            result = out_train.cpu()
-            #img_denoise = Anti_Normlize(img_train, img_denoise)#这种做法是错误的
+            ##解归一化,即使打乱也不影响
+            result = Anti_Normlize(img_train, out_train)
+            img_denoise = Anti_Normlize(img_train, img_denoise)
             print(result.shape)
             #result = out_train
-            noise = img_denoise.cpu()
-            #暂时先放这，没有进行复原
+            noise = img_denoise
             #print(torch.max(label[0,:,:,:]))
             label_save = label.cpu().numpy()
 
