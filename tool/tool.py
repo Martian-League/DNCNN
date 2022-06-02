@@ -85,14 +85,16 @@ def Overlap(img,Windows_size,Overlap_size):
 
 def Anti_Normlize(img,result):
     B, C, H, W = img.shape
-    img = img.view(img.size(0), -1)
+
+    temp = img.view(img.size(0), -1)
     result = result.view(result.size(0), -1)
 
-    result *= (img.max(1, keepdim=True)[0]-img.min(1, keepdim=True)[0])
-    result += img.min(1, keepdim=True)[0]
+    result *= (temp.max(1, keepdim=True)[0]-temp.min(1, keepdim=True)[0])
+    result += temp.min(1, keepdim=True)[0]
 
     result = result.view(B, C, H, W)
-    return result
+    noise = img - result
+    return result,noise
 
 def Anti_Overlap(img,Windows_size,Overlap_size):
     B, C, H, W = img.shape

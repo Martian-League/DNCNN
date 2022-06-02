@@ -1,7 +1,8 @@
 import os
 import sys
-#print(sys.path)
-sys.path.append("/home/gwb/DNCNN/")
+sys.path.append("/tmp/pycharm_project_577/tool")
+from tool.tool import Anti_Normlize
+
 import argparse
 import segyio
 import numpy as np
@@ -12,11 +13,10 @@ import torchvision.utils as utils
 from torch.autograd import Variable
 from torch.utils.data import DataLoader
 from tensorboardX import SummaryWriter
-#from dataset_test import ImageDataset
 
 from dataset.dataset_segy_test import SegyDataset
 from core.models import DnCNN
-#from dataset_origin import prepare_data, Dataset
+
 from core.utils import *
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
@@ -58,10 +58,11 @@ def main():
         model = nn.DataParallel(net, device_ids=device_ids).cuda()
         model.load_state_dict(torch.load(os.path.join(opt.logdir, 'net_17_segy_60.pth')))
         model.eval()
-        for i, (data, label,img_name) in enumerate(loader_train, 0):
+        for i, (data, label,raw_data,img_name) in enumerate(loader_train, 0):
             # training step
             torch.cuda.empty_cache()
             img_train = label.cuda()
+            raw_data = raw_data.cuda()
             imgn_train = data.cuda()
             #label = label.cpu().numpy()
 
@@ -69,21 +70,23 @@ def main():
             img_denoise = model(imgn_train)
             out_train = torch.clamp(imgn_train-img_denoise, 0, 1.)
 
-            loss = criterion(out_train, imgn_train) / (imgn_train.size()[0] * 2)
+            loss = criterion(out_train, img_train) / (img_train.size()[0] * 2)
             psnr_train = batch_PSNR(out_train, img_train, 1.)
 
-            result = out_train.cpu().squeeze().numpy()
+            result, noise = Anti_Normlize(raw_data,out_train)
+            result = result.cpu().squeeze().numpy()
+            noise = noise.cpu().squeeze().numpy()
             #img_denoise = Anti_Normlize(img_train, img_denoise)#这种做法是错误的
             print(result.shape)
             #result = out_train
-            noise = img_denoise.cpu().squeeze().numpy()
+            #noise = img_denoise.cpu().squeeze().numpy()
             #暂时先放这，没有进行复原
             #print(torch.max(label[0,:,:,:]))
             label_save = label.cpu().numpy()
 
             print("[%d/%d] loss: %.4f PSNR_train: %.4f" %
                 ( i+1, len(loader_train), loss.item(), psnr_train))
-            print(img_name)
+            #print(img_name)
             img_name = img_name[0][:-4]#img_name是个元组
             print(img_name)
             #img_noise = 'the_'+str(i)+'_noise'
@@ -98,9 +101,10 @@ def main():
             noise.T.tofile('%s/segy_dncnn/images_noise/%s_%s.bin' % (opt.exp_path, 'noise', img_name))
             label_save.T.tofile('%s/segy_dncnn/images_origin/%s_%s.bin' % (opt.exp_path, 'origin', img_name))
             '''
-            segyio.tools.from_array2D('%s/segy_dncnn/images_result/%s_%s.sgy' % (opt.exp_path, 'result', img_name), result.T)
-            segyio.tools.from_array2D('%s/segy_dncnn/images_noise/%s_%s.sgy' % (opt.exp_path, 'noise', img_name), noise.T)
-            #segyio.tools.from_array2D('%s/segy_dncnn/images_result/%s_%s.bin' % (opt.exp_path, 'result', img_name), label_save.T)
+            segyio.tools.from_array2D('%s/segy_dncnn/images_result_norm/%s_%s.sgy' % (opt.exp_path, 'result', img_name), result.T, dt=2000)
+            segyio.tools.from_array2D('%s/segy_dncnn/images_noise_norm/%s_%s.sgy' % (opt.exp_path, 'noise', img_name), noise.T, dt=2000)
+            #segyio.tool.from_array2D('%s/segy_dncnn/images_result/%s_%s.bin' % (opt.exp_path, 'result', img_name), label_save.T)
+
             save_imgs = torch.cat((save_imgs, out_train.cpu()), dim=0)
             utils.save_image(
                 save_imgs.float(),
@@ -114,35 +118,6 @@ def main():
                 (opt.exp_path, img_name, opt.mode),
                 nrow=int(save_imgs.size(0) ** 1),
                 normalize=True)
-
-
-def Normlize(img,label):
-    B, C, H, W = img.shape
-    img = img.view(B, -1)
-    label = label.view(B, -1)
-
-    label -= img.min(1, keepdim=True)[0]
-    img -= img.min(1, keepdim=True)[0]
-
-    label /= img.max(1, keepdim=True)[0]
-    img /= img.max(1, keepdim=True)[0]
-
-    img = img.view(B, C, H, W)
-    label = label.view(B, C, H, W)
-    return img, label
-
-def Anti_Normlize(img,result):
-    B, C, H, W = img.shape
-    #img = img.view(img.size(0), -1)
-    result = result.view(result.size(0), -1)
-    img = img.view(img.size(0), -1)
-    result *= (img.max(1, keepdim=True)[0]-img.min(1, keepdim=True)[0])
-    result += img.min(1, keepdim=True)[0]
-
-    result = result.view(B, C, H, W)
-    return result.cpu().numpy()
-
-
 
 
 if __name__ == "__main__":

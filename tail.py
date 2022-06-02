@@ -7,19 +7,22 @@ def main():
 
     for filename in os.listdir(root_dir + "sample"):  # 展开成一个新的列表
         metas.append(filename)
+    '''
     for filename in os.listdir(root_dir + "label"):  # 展开成一个新的列表
         metaslabel.append(filename)
-    print(len(metas))
-    print(len(metaslabel))
-
+    '''
+    #print(len(metas))
+    #print(len(metaslabel))
+    #metaslabel.sort(key=lambda x:int(x.split('.')[-2]))
+    metas.sort(key=lambda x:int(x.split('_')[-2]))
     for file in metas:
-        temp = "clean_"+file
-        if temp not in metaslabel:
-            f = open("/home/gwb/Dataset/label_list.txt",'w+')
-            #f.seek(0)
-            f.truncate(0)
-            f.write(temp+ os.linesep)
-            f.close()
+        #temp = "clean_"+file
+        #if temp not in metaslabel:
+        f = open("/home/gwb/Dataset/label_list.txt",'a')
+        #f.seek(0)
+        #f.truncate(0)
+        f.write(file + os.linesep)#换行符
+        f.close()
 def test():
     import os
     import sys
@@ -28,6 +31,8 @@ def test():
     # 将需要导入模块代码文件相对于当前文件目录的绝对路径加入到sys.path中
     sys.path.append("/home/gwb/DNCNN/core/")
     import core
+
+
 if __name__=="__main__":
-    #main()
-    test()
+    main()
+    #test()

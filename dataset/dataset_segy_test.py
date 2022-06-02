@@ -15,22 +15,27 @@ import pywt
 
 def read_data(root_dir,Normlize):
 
-    metas=[]
+    metasdata=[]
     metaslabel=[]
     sample=[]
     label=[]
     for filename in os.listdir(root_dir + "sample"):  # 展开成一个新的列表
-        metas.append(filename)
+        metasdata.append(filename)
     for filename in os.listdir(root_dir + "label"):  # 展开成一个新的列表
         metaslabel.append(filename)
-
     #train_filename = random.sample(metas, 5)
-    for file in metas[:10]:
-        filename_sample = root_dir + "sample/" + file
-        filename_label = root_dir + "label/clean_" + file
-        sample_t = ReadSegyData(filename_sample)
+
+    metaslabel.sort(key=lambda x:int(x.split('_')[-2]))
+    metasdata.sort(key=lambda x:int(x.split('_')[-2]))
+
+    metas = list(zip(metasdata,metaslabel))
+
+    for filename_sample, filename_label in metas:
+        #filename_sample = root_dir + "sample/" + file
+        #filename_label = root_dir + "label/clean_" + file
+        sample_t = ReadSegyData(root_dir + "sample/" + filename_sample)
         #print("训练集OK")
-        label_t = ReadSegyData(filename_label)
+        label_t = ReadSegyData(root_dir + "label/" + filename_label)
         #print(file)
         #sample_t = np.pad(sample_t, ((0, 0), (1152-sample_t.shape[1],0)), 'symmetric')
         #label_t = np.pad(label_t, ((0, 0), (1152 - label_t.shape[1], 0)), 'symmetric')
@@ -43,7 +48,7 @@ def read_data(root_dir,Normlize):
         label.append(label_t.astype(np.float32))
     sample_torch = [torch.FloatTensor(item) for item in sample]
     label_torch = [torch.FloatTensor(item) for item in label]
-    return sample_torch, label_torch,metas[:10]
+    return sample_torch, label_torch, metasdata
 
 def ReadSegyData(filename):
     with segyio.open(filename,'r',ignore_geometry=True) as f:
@@ -53,7 +58,7 @@ def ReadSegyData(filename):
     '''
     dst_root = "/home/gwb/DNCNN/result/segy_dncnn/sgy_root/"
     dstpath = dst_root + os.path.basename(filename)
-    segyio.tools.from_array2D(dstpath, data2D.T)
+    segyio.tool.from_array2D(dstpath, data2D.T)
     '''
     return data2D
 
@@ -88,6 +93,27 @@ def Normlize(img,label):
     label = label.view(B,  H, W)
     return img, label
 
+def Normlize_c(img,label):
+    #排除野值干扰
+    B, H, W = img.shape
+    img = img.contiguous().view(B, -1)
+    label = label.contiguous().view(B, -1)
+
+    img_sort, idx = torch.sort(img)
+    Min = torch.quantile(img_sort, 0.0001, dim=1, keepdim=True) * 1.2
+    Max = torch.quantile(img_sort, 0.9999, dim=1, keepdim=True) * 1.2
+
+    label -= Min
+    img -= Min
+
+    label /= (Max-Min)
+    img /= (Max-Min)
+
+    img = img.view(B,  H, W)
+    label = label.view(B,  H, W)
+    return img, label
+
+
 class SegyDataset(data.Dataset):  # 继承
 
     def __init__(self,path):
@@ -96,14 +122,17 @@ class SegyDataset(data.Dataset):  # 继承
         self.data = []
         self.label = []
         self.filename= []
+        self.rawdata = []
         root_dir = path
 
         data, label ,self.filename = read_data(root_dir, False)
 
         for i in range(len(data)):
+            self.rawdata.append(data[i].unsqueeze(0))
             data[i], label[i] = Normlize(data[i].unsqueeze(0), label[i].unsqueeze(0))
             self.data.append(data[i])
             self.label.append(label[i])
+
         #self.data = np.concatenate(self.data, axis=0)
         #self.label = np.concatenate(self.label, axis=0)
         self.num = len(self.data)
@@ -116,15 +145,16 @@ class SegyDataset(data.Dataset):  # 继承
 
         img = self.data[idx]#[500:1012, 0:512]
         label = self.label[idx]#[500:1012, 0:512]
+        raw_data = self.rawdata[idx]
         #img = img[:,500:1012, 0:512]
         #label = label[:,500:1012, 0:512]
-        row = img.shape[1]
-        col = img.shape[2]
+        #row = img.shape[1]
+        #col = img.shape[2]
         #print(img.shape)
         img_name = self.filename[idx]
-        img = img.reshape(1, row, col)
-        label = label.reshape(1, row, col)
-        img = torch.FloatTensor(img)
-        label = torch.FloatTensor(label)
-        return img, label,img_name
+        #img = img.reshape(1, row, col)
+        #label = label.reshape(1, row, col)
+        #img = torch.FloatTensor(img)
+        #label = torch.FloatTensor(label)
+        return img, label, raw_data, img_name
 

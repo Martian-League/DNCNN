@@ -22,16 +22,13 @@ os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
 parser = argparse.ArgumentParser(description="DnCNN")
-parser.add_argument("--preprocess", type=bool, default=False, help='run prepare_data or not')
 parser.add_argument("--batchSize", type=int, default=300, help="Training batch size")
 parser.add_argument("--num_of_layers", type=int, default=17, help="Number of total layers")
 parser.add_argument("--epochs", type=int, default=20, help="Number of training epochs")
 parser.add_argument("--milestone", type=int, default=8, help="When to decay learning rate; should be less than epochs")
 parser.add_argument("--lr", type=float, default=1e-3, help="Initial learning rate")
 parser.add_argument("--outf", type=str, default="logs", help='path of log files')
-parser.add_argument("--mode", type=str, default="B", help='with known noise level (S) or blind training (B)')
-parser.add_argument("--noiseL", type=float, default=5, help='noise level; ignored when mode=B')
-parser.add_argument("--val_noiseL", type=float, default=5, help='noise level used on validation set')
+
 parser.add_argument("--exp_path", type=str, default="/home/gwb/DNCNN/result", help='with known noise level (S) or blind training (B)')
 parser.add_argument("--logdir", type=str, default="logs", help='path of log files')
 parser.add_argument("--path_train", type=str, default="/home/gwb/Dataset/train/", help='path of log files')
