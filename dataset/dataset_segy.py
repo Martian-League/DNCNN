@@ -26,7 +26,7 @@ def read_data(root_dir,Normlize):
         metaslabel.append(filename)
     print(len(metas))
     print(len(metaslabel))
-    train_filename = random.sample(metas, 10)
+    train_filename = random.sample(metas, 25)
     for file in train_filename:
         filename_sample = root_dir + "sample/" + file
         filename_label = root_dir + "label/clean_" + file
@@ -206,14 +206,21 @@ class SegyDataset(data.Dataset):  # 继承
             random_idx = np.random.randint(0, high=self.num)
             print("漏网之鱼")
             #将数据的最大值和最小值输出偶然发现，空白时两者一样大
-        img = Wavelet(self.data[random_idx, :, :])
+        '''img = Wavelet(self.data[random_idx, :, :])
         label = Wavelet(self.label[random_idx, :, :])
-
         row = img.shape[1]
         col = img.shape[2]
 
         img = img.reshape(4, row, col)
-        label = label.reshape(4, row, col)
+        label = label.reshape(4, row, col)'''
+
+        img = self.data[random_idx, :, :]
+        label = self.label[random_idx, :, :]
+        row = img.shape[0]
+        col = img.shape[1]
+
+        img = img.reshape(1, row, col)
+        label = label.reshape(1, row, col)
         img = torch.FloatTensor(img)
         label = torch.FloatTensor(label)
         #data, label = Normlize(img, label)

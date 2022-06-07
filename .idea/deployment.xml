@@ -19,7 +19,7 @@
       <paths name="gwb@202.117.43.228:22 (2)">
         <serverdata>
           <mappings>
-            <mapping deploy="/tmp/pycharm_project_577" local="$PROJECT_DIR$" />
+            <mapping deploy="/home/gwb/DNCNN" local="$PROJECT_DIR$" />
           </mappings>
         </serverdata>
       </paths>

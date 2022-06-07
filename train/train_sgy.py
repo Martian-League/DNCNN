@@ -18,13 +18,13 @@ from core.utils import *
 from dataset.dataset_segy import SegyDataset
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2,3"
 
 parser = argparse.ArgumentParser(description="DnCNN")
 parser.add_argument("--preprocess", type=bool, default=False, help='run prepare_data or not')
-parser.add_argument("--batchSize", type=int, default=2, help="Training batch size")
+parser.add_argument("--batchSize", type=int, default=400, help="Training batch size")
 parser.add_argument("--num_of_layers", type=int, default=17, help="Number of total layers")
-parser.add_argument("--epochs", type=int, default=300, help="Number of training epochs")
+parser.add_argument("--epochs", type=int, default=50, help="Number of training epochs")
 parser.add_argument("--milestone", type=int, default=8, help="When to decay learning rate; should be less than epochs")
 parser.add_argument("--lr", type=float, default=1e-3, help="Initial learning rate")
 parser.add_argument("--outf", type=str, default="logs", help='path of log files')
@@ -56,21 +56,21 @@ def main():
     loader_val = DataLoader(dataset=dataset_val, num_workers=2, batch_size=opt.batchSize, shuffle=False)
     print("# of training samples: %d\n" % int(len(dataset_train)))
     # Build model
-    net = DnCNN(channels=4, num_of_layers=opt.num_of_layers)
+    net = DnCNN(channels=1, num_of_layers=opt.num_of_layers)
     net.apply(weights_init_kaiming)
 
     criterion = nn.MSELoss(size_average=False)
     # Move to GPU
-    device_ids = [0,1,2,3]
+    device_ids = [0,1]
     model = nn.DataParallel(net, device_ids=device_ids).cuda()
-    seed = 123
+    seed = 456
     torch.cuda.manual_seed_all(seed)
     torch.manual_seed(seed)
     #model.load_state_dict(torch.load(os.path.join(opt.logdir, 'net_17_segy.pth')))
     criterion.cuda()
     # Optimizer
     optimizer = optim.Adam(model.parameters(), lr=opt.lr)
-    scheduler = lr_scheduler.StepLR(optimizer, step_size=130, gamma=0.1)
+    scheduler = lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.1)
     # training
     writer = SummaryWriter(opt.outf)
     step = 0
@@ -128,17 +128,17 @@ def main():
                 (epoch+1, i+1, len(loader_train), loss_mse.item(), tv_loss.item(), psnr_train, ssim_train,ssim_loss))
             img_name = 'the_'+str(i)+'_seismic'
             np.save('%s/test/images_result/%s_%s.npy' % (opt.exp_path, img_name, opt.mode), out_train.detach().cpu().numpy())
-            #save_imgs = torch.cat((save_imgs[[0]], out_train.cpu()[[0]]), dim=0)
+            save_imgs = torch.cat((save_imgs[[0]], out_train.cpu()[[0]]), dim=0)
             #当批次较大时使用上面的，不然一下子保存的图像太多就会出错
-            save_imgs = torch.cat((save_imgs, out_train.cpu()), dim=0)
+            #save_imgs = torch.cat((save_imgs, out_train.cpu()), dim=0)
             #save_noise = torch.cat((save_noise, out_train.cpu()), dim=0)
 
-            utils.save_image(
+            '''utils.save_image(
                 imgn_train.float(),
                 '%s/images_clean/%s_%s.jpg' %
                 (opt.exp_path, img_name, opt.mode),
                 nrow=int(save_imgs.size(0) ** 1),
-                normalize=True)
+                normalize=True)'''
 
             utils.save_image(
                 save_imgs.float(),
@@ -183,7 +183,7 @@ def main():
         writer.add_image('noisy image', Imgn, epoch)
         writer.add_image('reconstructed image', Irecon, epoch)
         # save model
-        #torch.save(model.state_dict(), os.path.join(opt.outf, 'net_17_segy_60.pth'))
+        torch.save(model.state_dict(), os.path.join(opt.outf, 'net_17_segy_25num.pth'))
 
 if __name__ == "__main__":
     '''if opt.preprocess:

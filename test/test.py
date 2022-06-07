@@ -44,7 +44,10 @@ def test(data,label):
         # Move to GPU
         device_ids = [0]
         model = nn.DataParallel(net, device_ids=device_ids).cuda()
-        model.load_state_dict(torch.load(os.path.join(opt.logdir, 'net_17_globalnorm.pth')))
+        #25个样本大小
+        model.load_state_dict(torch.load(os.path.join(opt.logdir, 'net_17_segy_25num.pth')))
+        #50个样本大小
+        #model.load_state_dict(torch.load(os.path.join(opt.logdir, 'net_17_globalnorm.pth')))
         criterion.cuda()
         # training
         writer = SummaryWriter(opt.outf)
