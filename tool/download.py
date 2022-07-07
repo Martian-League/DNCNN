@@ -1,7 +1,7 @@
 import os
 import shutil
 
-source_path = os.path.abspath(r'/home/gwb/DNCNN/result/segy_dncnn/images_noise_norm_test/')
+source_path = os.path.abspath(r'/home/gwb/DNCNN/result/segy_dncnn/images_result_norm_10/')
 target_path = os.path.abspath(r'/home/gwb/DNCNN/result/segy_dncnn/download/')
 file_com = [382214,866556,932193,1203627,1280711]
 if not os.path.exists(target_path):

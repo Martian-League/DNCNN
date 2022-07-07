@@ -13,7 +13,7 @@ import numpy as np
 import random
 def read_data(root_dir,Normlize):
     item_paration=[]
-    for i in range(205):
+    for i in range(10):
         filename = root_dir + "sesmic_" + str(i) + 'th_result_denosing.npy'
         y = np.load(filename)  # (1000,128,128,1)
         y = y.astype(np.float32)
@@ -23,6 +23,7 @@ def read_data(root_dir,Normlize):
     np.save("/home/gwb/DNCNN/result/E_shuffle.npy", E_shuffle)
     item_paration = np.array(item_paration)
     paration_shuffle = np.dot(item_paration, E_shuffle)
+
     return paration_shuffle
 
 def Randomlize(Sample):

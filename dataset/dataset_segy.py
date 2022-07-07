@@ -20,7 +20,7 @@ def read_data(root_dir,Normlize):
     metaslabel=[]
     sample=[]
     label=[]
-    for filename in os.listdir(root_dir + "sample"):  # 展开成一个新的列表
+    for filename in os.listdir(root_dir + "sample2"):  # 展开成一个新的列表
         metas.append(filename)
     for filename in os.listdir(root_dir + "label"):  # 展开成一个新的列表
         metaslabel.append(filename)
@@ -28,7 +28,7 @@ def read_data(root_dir,Normlize):
     print(len(metaslabel))
     train_filename = random.sample(metas, 25)
     for file in train_filename:
-        filename_sample = root_dir + "sample/" + file
+        filename_sample = root_dir + "sample2/" + file
         filename_label = root_dir + "label/clean_" + file
         sample_t = ReadSegyData(filename_sample)
         #print("训练集OK")
@@ -40,7 +40,7 @@ def read_data(root_dir,Normlize):
             #print(np.max(label_t))
             sample_t  = sample_t / np.max(sample_t)
             label_t = label_t / np.max(label_t)
-        sample.append(sample_t.astype(np.float32))  # ,此时读取来的数据com还是1个200*3001的一长串，不能二维显示，需要转换形状
+        sample.append(sample_t.astype(np.float32))
         label.append(label_t.astype(np.float32))
     sample_torch = [torch.FloatTensor(item) for item in sample]
     label_torch = [torch.FloatTensor(item) for item in label]
@@ -186,7 +186,7 @@ class SegyDataset(data.Dataset):  # 继承
                 d_numpy = data[i].numpy()
                 lb_numpy = label[i].numpy()
                 #print(d_numpy.shape)
-                temp1, temp2 = Split_data_random(d_numpy[:, : , :], lb_numpy[: ,: ,:])
+                temp1, temp2 = Split_data_random(d_numpy[:, :2500 , :], lb_numpy[: ,:2500 ,:])
                 self.data.append(temp1)
                 self.label.append(temp2)
         self.data = np.concatenate(self.data, axis=0)

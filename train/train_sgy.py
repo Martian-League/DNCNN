@@ -63,7 +63,7 @@ def main():
     # Move to GPU
     device_ids = [0,1]
     model = nn.DataParallel(net, device_ids=device_ids).cuda()
-    seed = 456
+    seed = 789
     torch.cuda.manual_seed_all(seed)
     torch.manual_seed(seed)
     #model.load_state_dict(torch.load(os.path.join(opt.logdir, 'net_17_segy.pth')))
@@ -76,14 +76,6 @@ def main():
     step = 0
     #noiseL_B=[0,55] # ingnored when opt.mode=='S'
     for epoch in range(0,opt.epochs):
-        '''if epoch < opt.milestone:
-            current_lr = opt.lr
-        else:
-            current_lr = opt.lr / 10.
-        # set learning rate
-        for param_group in optimizer.param_groups:
-            param_group["lr"] = current_lr'''
-        #print('learning rate %f' % current_lr)
         # train
         for i, (data, label)in enumerate(loader_train, 0):
             # training step
@@ -98,37 +90,39 @@ def main():
             imgn_train = data
             noise = imgn_train-img_train
 
-            save_imgs = img_train.cpu().clone()
-            save_noise = noise.cpu().clone()
+            #save_imgs = img_train.cpu().clone()
+            #save_noise = noise.cpu().clone()
 
             img_train, imgn_train = Variable(img_train.cuda()), Variable(imgn_train.cuda())
             noise = Variable(noise.cuda())
             out_noise = model(imgn_train)
-            loss_mse = criterion(out_noise, noise) / (imgn_train.size()[1]*2)
+            loss = criterion(out_noise, noise) / (imgn_train.size()[1]*2)
 
-            out_train = torch.clamp(imgn_train - model(imgn_train),-2,2)
+            out_train = torch.clamp(imgn_train - out_noise,-2,2)
+            '''
             TV_loss = TVLoss()
             tv_loss  = TV_loss(out_train)
             ssim_loss = SSIM_loss(out_train, img_train, 3)
             beta = 0
             alpha = 0
             loss = loss_mse + beta*tv_loss - alpha*ssim_loss
-
+            '''
             loss.backward()
             optimizer.step()
-            # results
-            #model.eval()
-            out_train = torch.clamp(imgn_train - model(imgn_train), -2, 2.)
 
-
+            #out_train = torch.clamp(imgn_train - model(imgn_train), -2, 2.)
             psnr_train = batch_PSNR(out_train, img_train, 1.)
             #print(np.shape(out_train))
             ssim_train = batch_SSIM(out_train, img_train)
-            print("[epoch %d][%d/%d] loss: %.4f ,tv_loss: %.4f, PSNR_train: %.4f SSIM_train: %.4f SSIM_loss: %.4f" %
-                (epoch+1, i+1, len(loader_train), loss_mse.item(), tv_loss.item(), psnr_train, ssim_train,ssim_loss))
+            print("[epoch %d][%d/%d] loss: %.4f , PSNR_train: %.4f SSIM_train: %.4f" %
+                  (epoch + 1, i + 1, len(loader_train),loss, psnr_train, ssim_train))
+
+            #print("[epoch %d][%d/%d] loss: %.4f ,tv_loss: %.4f, PSNR_train: %.4f SSIM_train: %.4f SSIM_loss: %.4f" %
+            #    (epoch+1, i+1, len(loader_train), loss_mse.item(), tv_loss.item(), psnr_train, ssim_train,ssim_loss))
+
             img_name = 'the_'+str(i)+'_seismic'
-            np.save('%s/test/images_result/%s_%s.npy' % (opt.exp_path, img_name, opt.mode), out_train.detach().cpu().numpy())
-            save_imgs = torch.cat((save_imgs[[0]], out_train.cpu()[[0]]), dim=0)
+            #np.save('%s/test/images_result/%s_%s.npy' % (opt.exp_path, img_name, opt.mode), out_train.detach().cpu().numpy())
+            #save_imgs = torch.cat((save_imgs[[0]], out_train.cpu()[[0]]), dim=0)
             #当批次较大时使用上面的，不然一下子保存的图像太多就会出错
             #save_imgs = torch.cat((save_imgs, out_train.cpu()), dim=0)
             #save_noise = torch.cat((save_noise, out_train.cpu()), dim=0)
@@ -138,7 +132,7 @@ def main():
                 '%s/images_clean/%s_%s.jpg' %
                 (opt.exp_path, img_name, opt.mode),
                 nrow=int(save_imgs.size(0) ** 1),
-                normalize=True)'''
+                normalize=True)
 
             utils.save_image(
                 save_imgs.float(),
@@ -148,11 +142,12 @@ def main():
                 normalize=True)
 
             utils.save_image(
-                save_noise.float(),
+                save_noise[0].float(),
                 '%s/images_noise/%s_%s.jpg' %
                 (opt.exp_path, img_name, opt.mode),
                 nrow=int(save_imgs.size(0) ** 1),
                 normalize=True)
+                '''
             # if you are using older version of PyTorch, you may need to change loss.item() to loss.data[0]
             if step % 10 == 0:
                 writer.add_scalar('loss', loss.item(), step)
@@ -174,8 +169,10 @@ def main():
                     print("\n[epoch %d] PSNR_val: %.4f" % (epoch + 1, psnr_val))
                     writer.add_scalar('PSNR on validation data', psnr_val, epoch)
             step += 1
+        scheduler.step()
+        print(optimizer.state_dict()['param_groups'][0]['lr'])
         # log the images
-        out_train = torch.clamp(imgn_train-model(imgn_train),-2,2)
+        #out_train = torch.clamp(imgn_train-model(imgn_train),-2,2)
         Img = utils.make_grid(img_train.data, nrow=8, normalize=True, scale_each=True)
         Imgn = utils.make_grid(imgn_train.data, nrow=8, normalize=True, scale_each=True)
         Irecon = utils.make_grid(out_train.data, nrow=8, normalize=True, scale_each=True)
@@ -183,7 +180,7 @@ def main():
         writer.add_image('noisy image', Imgn, epoch)
         writer.add_image('reconstructed image', Irecon, epoch)
         # save model
-        torch.save(model.state_dict(), os.path.join(opt.outf, 'net_17_segy_25num.pth'))
+        torch.save(model.state_dict(), os.path.join(opt.outf, 'net_17_2500_lr_25num.pth'))
 
 if __name__ == "__main__":
     '''if opt.preprocess:

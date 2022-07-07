@@ -57,31 +57,38 @@ def main():
         # Move to GPU
         device_ids = [0]
         model = nn.DataParallel(net, device_ids=device_ids).cuda()
-        model.load_state_dict(torch.load(os.path.join('/home/gwb/DNCNN/train/logs/net_17_segy_25num.pth')))
+        #model.load_state_dict(torch.load(os.path.join('/home/gwb/DNCNN/train/logs/net_17_segy_25num.pth')))
         #model.load_state_dict(torch.load(os.path.join(opt.logdir, 'net_17_segy_60.pth')))
+        #加载使用cadowz去噪前的数据训练的结果
+        #model.load_state_dict(torch.load(os.path.join('/home/gwb/DNCNN/train/logs/net_17_newsegy_25num.pth')))
+        model.load_state_dict(torch.load(os.path.join('/home/gwb/DNCNN/train/logs/net_17_2500_lr_25num.pth')))
         model.eval()
+        pdd_size = 15
+        padding = torch.nn.ReflectionPad2d(pdd_size)
         for i, (data, label, raw_data, img_name) in enumerate(loader_train, 0):
             # training step
             torch.cuda.empty_cache()
             img_train = label.cuda()
             raw_data = raw_data.cuda()
-            imgn_train = data.cuda()
+            imgn_train = padding(data).cuda()
             # label = label.cpu().numpy()
 
             save_imgs = img_train.cpu().clone()
             img_denoise = model(imgn_train)
             #out_train = torch.clamp(imgn_train - img_denoise, 0, 1.)
             out_train = imgn_train - img_denoise
-
+            print(out_train.shape)
+            out_train = out_train[:,:,15:-15,15:-15].clone() #将前面的padding去掉
+            print(raw_data.shape)
             loss = criterion(out_train, img_train) / (img_train.size()[0] * 2)
             psnr_train = batch_PSNR(out_train, img_train, 1.)
 
             result, noise = Anti_Normlize(raw_data, out_train)
             result = result.cpu().squeeze().numpy()
-            noise = img_denoise.cpu().squeeze().numpy()
+            noise = noise.cpu().squeeze().numpy()
             #noise = noise.cpu().squeeze().numpy()
             # img_denoise = Anti_Normlize(img_train, img_denoise)#这种做法是错误的
-            print(result.shape)
+            #print(np.max(noise))
             # result = out_train
             # noise = img_denoise.cpu().squeeze().numpy()
             # 暂时先放这，没有进行复原
@@ -96,18 +103,10 @@ def main():
             # img_noise = 'the_'+str(i)+'_noise'
             # img_origin = 'the_' + str(i) + '_origin'
 
-            '''
-            np.save('%s/segy_dncnn/images_result/%s_%s.npy' % (opt.exp_path, 'result', img_name), result)
-            np.save('%s/segy_dncnn/images_noise/%s_%s.npy' % (opt.exp_path, 'noise', img_name), noise)
-            np.save('%s/segy_dncnn/images_origin/%s_%s.npy' % (opt.exp_path, 'origin', img_name), label_save)
 
-            result.T.tofile('%s/segy_dncnn/images_result/%s_%s.bin' % (opt.exp_path, 'result', img_name))
-            noise.T.tofile('%s/segy_dncnn/images_noise/%s_%s.bin' % (opt.exp_path, 'noise', img_name))
-            label_save.T.tofile('%s/segy_dncnn/images_origin/%s_%s.bin' % (opt.exp_path, 'origin', img_name))
-            '''
-            segyio.tools.from_array2D('%s/segy_dncnn/images_result_norm_test/%s_%s.sgy' % (opt.exp_path, 'result', img_name),
+            segyio.tools.from_array2D('%s/segy_dncnn/images_result_norm_25_upcadowz/%s_%s.sgy' % (opt.exp_path, 'result', img_name),
                                       result.T, dt=2000)
-            segyio.tools.from_array2D('%s/segy_dncnn/images_noise_norm_test/%s_%s.sgy' % (opt.exp_path, 'noise', img_name),
+            segyio.tools.from_array2D('%s/segy_dncnn/images_noise_norm_25_upcadowz/%s_%s.sgy' % (opt.exp_path, 'noise', img_name),
                                       noise.T, dt=2000)
             # segyio.tool.from_array2D('%s/segy_dncnn/images_result/%s_%s.bin' % (opt.exp_path, 'result', img_name), label_save.T)
 

@@ -6,6 +6,8 @@ Created on Sat Dec 26 12:17:19 2020
 """
 
 import os
+import sys
+sys.path.append("/home/gwb/DNCNN/")
 import argparse
 import numpy as np
 import torch
@@ -15,18 +17,17 @@ import torchvision.utils as utils
 from torch.autograd import Variable
 from torch.utils.data import DataLoader
 from tensorboardX import SummaryWriter
+import segyio
+from dataset.dataset_shuffle import ImageDataset
+from core.models import DnCNN
 
-from dataset_shuffle import ImageDataset
-from models import DnCNN
-from dataset_origin import prepare_data, Dataset
-from utils import *
-
+from core.utils import *
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3"
 
 parser = argparse.ArgumentParser(description="DnCNN")
 parser.add_argument("--preprocess", type=bool, default=False, help='run prepare_data or not')
-parser.add_argument("--batchSize", type=int, default=8, help="Training batch size")
+parser.add_argument("--batchSize", type=int, default=1, help="Training batch size")
 parser.add_argument("--num_of_layers", type=int, default=17, help="Number of total layers")
 parser.add_argument("--epochs", type=int, default=15, help="Number of training epochs")
 parser.add_argument("--milestone", type=int, default=8, help="When to decay learning rate; should be less than epochs")
@@ -53,7 +54,7 @@ def main():
     # Move to GPU
     device_ids = [0,2]
     model = nn.DataParallel(net, device_ids=device_ids).cuda()
-    model.load_state_dict(torch.load(os.path.join(opt.logdir, 'net_17_globalnorm.pth')))
+    model.load_state_dict(torch.load(os.path.join("/home/gwb/DNCNN/logs/", 'net_17_globalnorm.pth')))
     model.eval()
     for i, (data, label) in enumerate(loader_train, 0):
         # training step
@@ -84,10 +85,21 @@ def main():
         img_name = 'the_'+str(i)+'_seismic'
         img_noise = 'the_'+str(i)+'_noise'
         img_origin = 'the_' + str(i) + '_origin'
-
-        np.save('%s/shuffle_result/images_result/%s_%s.npy' % (opt.exp_path, img_name, opt.mode), result)
-        np.save('%s/shuffle_result/images_noise/%s_%s.npy' % (opt.exp_path, img_noise, opt.mode), noise)
-        np.save('%s/shuffle_result/images_origin/%s_%s.npy' % (opt.exp_path, img_origin, opt.mode), label_save)
+        print(result.shape)
+        print(noise.shape)
+        print(label_save.shape)
+        segyio.tools.from_array2D(
+            '%s/shuffle_result/images_result/%s_%s.sgy' % (opt.exp_path, img_name, opt.mode),
+            result.squeeze().T, dt=2000)
+        segyio.tools.from_array2D(
+            '%s/shuffle_result/images_noise/%s_%s.sgy' % (opt.exp_path, img_noise, opt.mode),
+            noise.squeeze().T, dt=2000)
+        segyio.tools.from_array2D(
+            '%s/shuffle_result/images_origin/%s_%s.sgy' % (opt.exp_path, img_origin, opt.mode),
+            label_save.squeeze().T, dt=2000)
+        segyio.tools.from_array2D(
+            '%s/shuffle_result/images_result/%s_%s.sgy' % (opt.exp_path, img_name+'shuffle', opt.mode),
+            label.numpy().squeeze().T, dt=2000)
         save_imgs = torch.cat((save_imgs, out_train.cpu()), dim=0)
         utils.save_image(
             save_imgs.float(),
@@ -203,7 +215,7 @@ if __name__ == "__main__":
             prepare_data(data_path='data', patch_size=40, stride=10, aug_times=1)
         if opt.mode == 'B':
             prepare_data(data_path='data', patch_size=50, stride=10, aug_times=2)'''
-    #main()
+    main()
     #stack_noise()
     #stack_signal()
-    stack_origin()
+    #stack_origin()

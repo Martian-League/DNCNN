@@ -11,7 +11,7 @@ def read_data(file_path):
     for filename in os.listdir(file_path):  # 展开成一个新的列表
         metas.append(filename)
     metas.sort(key=lambda x:int(x.split('_')[-2]))
-
+    #print(len(meta))
     for filename in metas:
 
         sample_t = ReadSegyData(os.path.join(file_path,filename))
